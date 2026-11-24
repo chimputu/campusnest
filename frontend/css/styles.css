@@ -323,3 +323,17 @@ input[type=checkbox],input[type=radio]{width:1.25rem;height:1.25rem;accent-color
 .site-footer p{margin:0}
 .auth2-foot{text-align:center;color:#fff;padding:1rem;font-size:.9rem;text-shadow:0 1px 8px rgba(0,0,0,.5)}
 .auth2-foot p{margin:0}
+
+/* === Phase 1 additions === */
+.bell{display:inline-flex;align-items:center;gap:.25rem;color:var(--teal)}
+.bell .nbadge{background:var(--stop);color:#fff;border-radius:999px;padding:0 .4rem;font-size:.75rem;font-weight:700}
+.nbadge{display:inline-block;background:var(--sun);color:var(--ink);border-radius:999px;padding:0 .45rem;font-size:.78rem;font-weight:700}
+.receipt-card{max-width:640px;margin:0 auto}
+.receipt-card h2{margin-bottom:.8rem}
+.receipt-card p{margin:.35rem 0}
+.modal .req-list{max-height:60vh;overflow:auto}
+@media print{
+  .topbar,.site-footer,.actions,.toast,.modal-back{display:none!important}
+  body{background:#fff;color:#000}
+  .receipt-card{border:1px solid #000;box-shadow:none}
+}
