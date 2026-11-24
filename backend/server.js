@@ -1,44 +1,55 @@
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 
+const env = require('./config/env');
 const pool = require('./config/db');
+const { notFoundApi, errorHandler } = require('./middleware/error');
 
 const app = express();
-const PORT = 3000;
-const authRoutes = require('./routes/auth');
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+app.use(helmet({ contentSecurityPolicy: false }));
+app.use(cookieParser());
+app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
 
-//Routes
-app.use('/api/auth', authRoutes);
+const bigJson = express.json({ limit: '6mb' });
+app.post('/api/listings', bigJson);
+app.patch('/api/listings/:id', bigJson);
+app.use(express.json({ limit: '1mb' }));
 
-// Test API endpoint
 app.get('/api/health', async (req, res) => {
-    try {
-        const result = await pool.query(
-            'SELECT current_database() AS database'
-        );
-
-        res.json({
-            status: 'success',
-            message: 'Backend connected to PostgreSQL',
-            database: result.rows[0].database
-        });
-
-    } catch (error) {
-        console.error(error);
-
-        res.status(500).json({
-            status: 'error',
-            message: 'Database connection failed'
-        });
-    }
+  try {
+    const result = await pool.query('SELECT current_database() AS database');
+    res.json({
+      status: 'success',
+      message: 'Backend connected to PostgreSQL',
+      database: result.rows[0].database
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ status: 'error', message: 'Database connection failed' });
+  }
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
+app.use('/api/listings/:listingId/reviews', require('./routes/reviews'));
+app.use('/api/listings/:listingId/reports', require('./routes/reports'));
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/zones', require('./routes/zones'));
+app.use('/api/listings', require('./routes/listings'));
+app.use('/api/requests', require('./routes/requests'));
+app.use('/api/saved', require('./routes/saved'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/receipts', require('./routes/receipts'));
+
+app.use('/api', notFoundApi);
+
+app.use(express.static(path.join(__dirname, '..', 'frontend')));
+
+app.use(errorHandler);
+
+app.listen(env.PORT, () => {
+  console.log(`Server running at http://localhost:${env.PORT}`);
 });
