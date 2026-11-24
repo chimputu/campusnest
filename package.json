@@ -9,7 +9,7 @@
     "migrate": "node backend/migrate.js",
     "seed": "node backend/seed.js",
     "db:check": "node backend/scripts/test-db.js",
-    "test": "echo 'no tests yet' && exit 0"
+    "test": "node --test tests/"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +19,8 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1177.0",
+    "@aws-sdk/s3-request-presigner": "^3.1177.0",
     "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

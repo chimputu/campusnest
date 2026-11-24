@@ -564,24 +564,52 @@ function reviewsPanel(o) {
   return `<div class="panel"><h3>Student reviews</h3>${form}${rs.length ? rs.map(r => `<div class="review"><span class="stars">${'★'.repeat(r.stars)}${'☆'.repeat(5 - r.stars)}</span> <strong>${esc(r.reviewer || 'Student')}</strong> <small style="color:var(--muted)">${new Date(r.created).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</small><p>${esc(r.comment || 'No comment.')}</p></div>`).join('') : '<p style="color:var(--muted);margin:0">No student reviews yet.</p>'}</div>`;
 }
 
+let leafletMap = null;
+const CAMPUS_CENTRE = { lat: -14.975, lng: 28.45 };
+
+function coordsFor(l) {
+  if (Number(l.latitude) && Number(l.longitude)) return [Number(l.latitude), Number(l.longitude)];
+  const id = Number(l.id) || 1;
+  return [CAMPUS_CENTRE.lat + (((id * 7) % 21) - 10) * 0.012, CAMPUS_CENTRE.lng + (((id * 13) % 21) - 10) * 0.012];
+}
+
 function viewMap(focusId) {
   const list = listings().sort((a, b) => a.distance - b.distance);
-  const pin = l => { const c = l.available ? '#1b7a40' : '#a8412c'; return `<g class="pin ${l.id === focusId ? 'on' : ''}" data-act="pin" data-id="${l.id}" transform="translate(${l.mapX},${l.mapY})" tabindex="0" role="button" aria-label="${esc(l.title)}, ${K(l.price)}">
-      <path class="pin-shape" d="M0,0 C-8,-12 -15,-19 -15,-27 a15,15 0 1,1 30,0 C15,-19 8,-12 0,0Z" fill="${c}" stroke="#fff" stroke-width="2"/><circle cy="-27" r="5.5" fill="#fff"/></g>`; };
   shell(`<div class="page-head"><div><h1>Listings on the map</h1><p>See how far each place is from campus.</p></div><a class="btn btn-ghost" href="#/home">Back to list</a></div>
     <div class="map-layout"><div><div class="map-box">
-      <svg viewBox="0 0 600 420" role="group" aria-label="Map of listings around campus">
-        <rect width="600" height="420" fill="#e6eddc"/>
-        <path d="M-10 330 C120 300 200 360 320 340 S520 270 610 300 L610 340 C520 310 420 380 320 385 S120 345 -10 372Z" fill="#b9d8e6"/>
-        <g fill="#d7ddcb"><rect x="40" y="40" width="110" height="70" rx="6"/><rect x="170" y="30" width="90" height="60" rx="6"/><rect x="380" y="40" width="120" height="50" rx="6"/><rect x="60" y="150" width="90" height="70" rx="6"/><rect x="430" y="140" width="110" height="80" rx="6"/><rect x="60" y="240" width="110" height="50" rx="6"/></g>
-        <g stroke="#fff" stroke-width="10" fill="none" stroke-linecap="round"><path d="M0 130 H600"/><path d="M0 255 H600"/><path d="M160 0 V300"/><path d="M400 0 V300"/><path d="M0 60 L170 130 L300 210 L600 400" stroke-width="6"/></g>
-        <g><rect x="258" y="178" width="84" height="64" rx="8" fill="#0f4c5c"/><text x="300" y="206" text-anchor="middle" fill="#fff" font-family="sans-serif" font-size="13" font-weight="700">Campus</text><text x="300" y="224" text-anchor="middle" fill="#f2b134" font-family="sans-serif" font-size="11">Mulungushi</text></g>
-        ${list.map(pin).join('')}
-      </svg><button class="btn btn-primary btn-sm search-area" data-act="search-area">Search this area</button></div>
+      <div id="map" class="leaflet-map" role="group" aria-label="Map of listings around campus"></div>
+      <button class="btn btn-primary btn-sm search-area" data-act="search-area">Search this area</button></div>
       <div class="legend"><span><i style="background:#1b7a40"></i>Available</span><span><i style="background:#a8412c"></i>Full</span><span><i style="background:#0f4c5c;border-radius:2px"></i>Campus</span></div></div>
       <div class="map-panel" id="map-panel">${list.map(l => `<div class="map-card ${l.id === focusId ? 'hl' : ''}" id="mc-${l.id}" data-act="open-listing" data-id="${l.id}" tabindex="0" role="button"><img src="${imgs(l)[0]}" alt=""><div><strong>${esc(l.title)}</strong><br><small style="color:var(--muted)">${l.distance} km from campus</small><br><span class="price" style="font-size:1rem">${K(l.price)}</span> ${availBadge(l)}</div></div>`).join('')}</div></div>
-    <p style="color:var(--muted);margin-top:1rem;font-size:.9rem">Tap a pin to highlight its card, then tap the card to open the listing.</p>`, 'map');
-  if (focusId) { const el = document.getElementById('mc-' + focusId); if (el) el.scrollIntoView({ block: 'nearest' }); }
+    <p style="color:var(--muted);margin-top:1rem;font-size:.9rem">Tap a marker to highlight its card, then tap the card to open the listing.</p>`, 'map');
+
+  if (typeof L === 'undefined') { toast('Map library could not be loaded.'); return; }
+  if (leafletMap) { leafletMap.remove(); leafletMap = null; }
+  leafletMap = L.map('map').setView([CAMPUS_CENTRE.lat, CAMPUS_CENTRE.lng], 13);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(leafletMap);
+  L.marker([CAMPUS_CENTRE.lat, CAMPUS_CENTRE.lng])
+    .addTo(leafletMap)
+    .bindPopup('<strong>Mulungushi University</strong><br>Main Campus');
+
+  const markers = {};
+  for (const l of list) {
+    const marker = L.marker(coordsFor(l)).addTo(leafletMap);
+    marker.bindPopup(`<strong>${esc(l.title)}</strong><br>${esc(l.location)}<br>${K(l.price)} / month`);
+    marker.on('click', () => {
+      document.querySelectorAll('.map-card').forEach(c => c.classList.remove('hl'));
+      const card = document.getElementById('mc-' + l.id);
+      if (card) { card.classList.add('hl'); card.scrollIntoView({ block: 'nearest' }); }
+    });
+    markers[l.id] = marker;
+  }
+  if (focusId && markers[focusId]) {
+    leafletMap.setView(coordsFor(list.find(l => l.id === focusId) || { id: focusId }), 15);
+    markers[focusId].openPopup();
+  }
+  const card = focusId && document.getElementById('mc-' + focusId);
+  if (card) card.scrollIntoView({ block: 'nearest' });
 }
 
 /* ---------- landlord screens ---------- */

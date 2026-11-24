@@ -337,3 +337,8 @@ input[type=checkbox],input[type=radio]{width:1.25rem;height:1.25rem;accent-color
   body{background:#fff;color:#000}
   .receipt-card{border:1px solid #000;box-shadow:none}
 }
+
+/* === Phase 2 additions === */
+.leaflet-map{height:420px;width:100%;border-radius:12px;overflow:hidden;background:#e6eddc}
+.map-box{position:relative}
+.map-box .search-area{position:absolute;right:.75rem;bottom:.75rem;z-index:500}

@@ -26,6 +26,9 @@
     payload_too_large: 'That upload is too large. Try fewer or smaller photos.',
     not_found: 'Not found.',
     rate_limited: 'Too many attempts. Please wait a few minutes and try again.',
+    storage_unavailable: 'Photo storage is not configured.',
+    payments_unavailable: 'Payments are not configured yet.',
+    payments_upstream_error: 'The payment provider could not be reached. Try again.',
     internal: 'Something went wrong. Please try again.',
   };
 
