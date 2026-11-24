@@ -1,3 +1,7 @@
+const { types } = require('pg');
+types.setTypeParser(20, (v) => (v === null ? null : parseInt(v, 10)));   // BIGINT -> number
+types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));   // NUMERIC -> float
+
 const { Pool } = require('pg');
 require('dotenv').config({ path: require('path').join(__dirname, '..', '..', '.env') });
 

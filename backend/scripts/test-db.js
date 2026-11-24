@@ -1,21 +1,29 @@
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const pool = require('../config/db');
 
-async function testConnection() {
-    try {
-        const result = await pool.query(
-            'SELECT current_database() AS database, NOW() AS server_time'
-        );
+async function check() {
+  const tables = await pool.query(
+    `SELECT table_name FROM information_schema.tables
+      WHERE table_schema = $1 ORDER BY table_name`,
+    ['public']
+  );
 
-        console.log('Database connection successful!');
-        console.log(result.rows[0]);
+  for (const row of tables.rows) {
+    const name = row.table_name;
+    const stmt = await pool.query('SELECT format($1::text, $2::text, $3::text) AS sql', ['SELECT COUNT(*)::int AS n FROM %I.%I', 'public', name]);
+    const count = await pool.query(stmt.rows[0].sql);
+    console.log(`${name}: ${count.rows[0].n}`);
+  }
 
-    } catch (error) {
-        console.error('Database connection failed:');
-        console.error(error.message);
-
-    } finally {
-        await pool.end();
-    }
+  const migrations = await pool.query('SELECT COUNT(*)::int AS n FROM _migrations');
+  console.log(`_migrations (applied): ${migrations.rows[0].n}`);
 }
 
-testConnection();
+check()
+  .then(async () => { await pool.end(); })
+  .catch(async (err) => {
+    console.error(err);
+    await pool.end();
+    process.exit(1);
+  });
