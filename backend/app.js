@@ -23,8 +23,8 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://unpkg.com'],
       styleSrcAttr: ["'unsafe-inline'"],
       fontSrc: ["'self'", 'https://fonts.gstatic.com'],
-      imgSrc: ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org'],
-      connectSrc: ["'self'", 'https://tile.openstreetmap.org'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https://tile.openstreetmap.org', 'https://res.cloudinary.com'],
+      connectSrc: ["'self'", 'https://tile.openstreetmap.org', 'https://api.cloudinary.com'],
       formAction: ["'self'"]
     }
   },
@@ -55,6 +55,7 @@ app.get('/api/health', async (req, res) => {
 
 app.use('/api/listings/:listingId/reviews', require('./routes/reviews'));
 app.use('/api/listings/:listingId/reports', require('./routes/reports'));
+app.use('/api/config', require('./routes/config'));
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/zones', require('./routes/zones'));
 app.use('/api/listings', require('./routes/listings'));

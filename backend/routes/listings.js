@@ -6,6 +6,7 @@ const { optionalAuth, requireRole } = require('../middleware/auth');
 const { validateBody, validateQuery } = require('../middleware/validate');
 const { asyncHandler, httpError, idParam } = require('../utils');
 const { recomputeListingStatus, lockListing } = require('../lib/listingStatus');
+const env = require('../config/env');
 
 const router = express.Router();
 
@@ -17,9 +18,21 @@ const ROOM_TYPE = z.enum(['SELF_CONTAINED', 'SHARED_ABLUTION']);
 const KITCHEN = z.enum(['SHARED_KITCHEN', 'OUTDOOR_COOKING', 'NONE']);
 const SECURITY = z.enum(['NONE', 'FENCE_ONLY', 'FENCE_AND_GUARD', '24H_GUARD_AND_CCTV']);
 
-const photoUrl = z.string().refine((v) => {
+function isAllowedPhotoUrl(value) {
+  let url;
+  try { url = new URL(value); } catch (_) { return false; }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port) return false;
+
+  const cloudName = env.CLOUDINARY_CLOUD_NAME;
+  if (cloudName && url.hostname === 'res.cloudinary.com' && url.pathname.startsWith(`/${cloudName}/`)) return true;
+
+  const s3Host = env.S3_BUCKET && env.S3_REGION ? `${env.S3_BUCKET}.s3.${env.S3_REGION}.amazonaws.com` : '';
+  return Boolean(s3Host && url.hostname === s3Host && url.pathname.startsWith('/listings/'));
+}
+
+const photoUrl = z.string().max(600000).refine((v) => {
   if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) return v.length <= 600000;
-  if (/^https:\/\//.test(v)) return true;
+  if (isAllowedPhotoUrl(v)) return true;
   return /^\/image\/[A-Za-z0-9._-]+$/.test(v);
 }, 'invalid photo url');
 

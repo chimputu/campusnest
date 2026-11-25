@@ -1,5 +1,6 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
+const env = require('../config/env');
 const pool = require('../config/db');
 const { asyncHandler, idParam } = require('../utils');
 const { displayName } = require('../lib/helpers');
@@ -11,6 +12,7 @@ const receiptLimiter = rateLimit({
   limit: 60,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  skip: () => env.DISABLE_RATE_LIMIT,
   message: { error: 'rate_limited' }
 });
 

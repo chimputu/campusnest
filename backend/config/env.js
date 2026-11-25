@@ -18,6 +18,11 @@ const schema = z.object({
   S3_BUCKET: z.string().min(1).optional(),
   S3_ACCESS_KEY_ID: z.string().min(1).optional(),
   S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  CLOUDINARY_CLOUD_NAME: z.string().min(1).optional(),
+  CLOUDINARY_API_KEY: z.string().min(1).optional(),
+  CLOUDINARY_API_SECRET: z.string().min(1).optional(),
+  // Set explicitly in isolated tests only; NODE_ENV never disables protection.
+  DISABLE_RATE_LIMIT: z.enum(['true', 'false']).default('false').transform((value) => value === 'true'),
   MOMO_ENV: z.enum(['sandbox', 'production']).optional().default('sandbox'),
   MOMO_BASE_URL: z.string().url().optional(),
   MOMO_CONSUMER_KEY: z.string().optional(),

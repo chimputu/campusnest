@@ -6,6 +6,7 @@ let bcrypt;
 try { bcrypt = require('bcrypt'); } catch (_) { bcrypt = require('bcryptjs'); }
 
 const pool = require('../config/db');
+const env = require('../config/env');
 const { safeUser } = require('../lib/helpers');
 const { signSession, setSessionCookie, clearSessionCookie, requireAuth } = require('../middleware/auth');
 const { validateBody } = require('../middleware/validate');
@@ -20,6 +21,7 @@ const authLimiter = rateLimit({
   limit: 10,
   standardHeaders: 'draft-7',
   legacyHeaders: false,
+  skip: () => env.DISABLE_RATE_LIMIT,
   message: { error: 'rate_limited' }
 });
 

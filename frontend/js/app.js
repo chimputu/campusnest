@@ -161,6 +161,7 @@ function ratingOf(o) {
 let pendingRole = null;
 let filters = { q: '', maxPrice: '', perRoom: '', selfContained: false, availableOnly: false, wifi: false, sort: 'near', open: false };
 let formImgs = [];
+let photoUploadActive = false;
 let contactCache = {};
 let notifThrottle = 0;
 
@@ -644,7 +645,7 @@ async function viewRequests() {
 
 function photoGridHtml() {
   if (!formImgs.length) return '<p class="hint" style="margin:0">No photos yet. A default picture will be used.</p>';
-  return formImgs.map((src, i) => `<div class="ph-item${i === 0 ? ' is-main' : ''}"><img src="${src}" alt="Photo ${i + 1}">
+  return formImgs.map((src, i) => `<div class="ph-item${i === 0 ? ' is-main' : ''}"><img src="${esc(src)}" alt="Photo ${i + 1}">
     ${i === 0 ? '<span class="ph-tag">Main</span>' : `<button type="button" class="ph-btn" data-act="main-photo" data-i="${i}">Make main</button>`}
     <button type="button" class="ph-x" data-act="remove-photo" data-i="${i}" aria-label="Remove photo ${i + 1}">×</button></div>`).join('')
     + `<p class="hint" style="grid-column:1/-1;margin:0">${formImgs.length} of ${MAX_PHOTOS} photos</p>`;
@@ -688,7 +689,7 @@ async function viewListingForm(id) {
         <label for="f-solar"><input id="f-solar" type="checkbox" name="has_solar_backup"> Solar backup</label>
       </div></fieldset>
       <div class="field"><label for="f-desc">Description</label><textarea id="f-desc" name="description" placeholder="Tell students what makes this place a good fit."></textarea></div>
-      <div class="field"><label for="f-img">Photos (up to ${MAX_PHOTOS})</label><input id="f-img" type="file" accept="image/*" multiple data-upload="1"><div id="photo-grid" class="photo-grid">${photoGridHtml()}</div></div>
+      <div class="field"><label for="f-img">Photos (up to ${MAX_PHOTOS})</label><input id="f-img" type="file" accept="image/jpeg,image/png,image/webp" multiple data-upload="1"><p id="photo-upload-status" class="hint photo-upload-status" role="status" aria-live="polite">JPEG, PNG or WebP; up to 5 MB each.</p><div id="photo-grid" class="photo-grid">${photoGridHtml()}</div></div>
       <div class="actions"><button class="btn btn-primary" type="submit">${l ? 'Save changes' : 'Publish listing'}</button><a class="btn btn-ghost" href="#/dashboard">Cancel</a></div>
     </form>`, 'add');
 }
@@ -860,7 +861,12 @@ const actions = {
     try { await api.post('/api/requests/' + el.dataset.id + '/complete'); toast('Booking completed'); route(); }
     catch (e) { surface(e); }
   },
-  'remove-photo'(el) { formImgs.splice(Number(el.dataset.i), 1); drawPhotoGrid(); },
+  'remove-photo'(el) {
+    formImgs.splice(Number(el.dataset.i), 1);
+    drawPhotoGrid();
+    setPhotoUploadStatus(formImgs.length ? `${formImgs.length} photo${formImgs.length === 1 ? '' : 's'} ready to publish.` : 'No photos selected.');
+    toast('Photo removed');
+  },
   'main-photo'(el) { const i = Number(el.dataset.i); const [p] = formImgs.splice(i, 1); formImgs.unshift(p); drawPhotoGrid(); },
   async 'admin-verify'(el) {
     try { await api.post('/api/admin/landlords/' + el.dataset.id + '/verify'); toast('Landlord verified'); route(); } catch (e) { surface(e); }
@@ -922,23 +928,9 @@ document.addEventListener('change', e => {
 });
 
 /* ---------- photo upload ---------- */
-function readPhoto(file) {
-  return new Promise(resolve => {
-    const reader = new FileReader();
-    reader.onerror = () => resolve(null);
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => resolve(null);
-      img.onload = () => {
-        const scale = Math.min(1, 800 / img.width); const c = document.createElement('canvas');
-        c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale);
-        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
-        resolve(c.toDataURL('image/jpeg', 0.7));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
+function setPhotoUploadStatus(message) {
+  const status = document.getElementById('photo-upload-status');
+  if (status) status.textContent = message;
 }
 async function handleUpload(input) {
   const files = Array.from(input.files || []); input.value = '';
@@ -946,8 +938,32 @@ async function handleUpload(input) {
   const room = MAX_PHOTOS - formImgs.length;
   if (room <= 0) return toast('You can add up to ' + MAX_PHOTOS + ' photos. Remove one first.');
   if (files.length > room) toast('Only ' + room + ' more photo' + (room > 1 ? 's' : '') + ' can be added.');
-  for (const f of files.slice(0, room)) { const d = await readPhoto(f); if (d) formImgs.push(d); }
-  drawPhotoGrid();
+  const selected = files.slice(0, room);
+  const form = input.closest('form');
+  const submit = form && form.querySelector('button[type="submit"]');
+  let added = 0;
+  photoUploadActive = true;
+  input.disabled = true;
+  if (submit) submit.disabled = true;
+  try {
+    for (let i = 0; i < selected.length; i++) {
+      setPhotoUploadStatus(`Uploading photo ${i + 1} of ${selected.length}…`);
+      try {
+        formImgs.push(await api.uploadListingPhoto(selected[i]));
+        added++;
+        drawPhotoGrid();
+      } catch (err) {
+        surface(err);
+      }
+    }
+    const message = added ? `${added} photo${added === 1 ? '' : 's'} ready to publish.` : 'No photos were added.';
+    setPhotoUploadStatus(message);
+    if (added) toast(`${added} photo${added === 1 ? '' : 's'} added`);
+  } finally {
+    photoUploadActive = false;
+    input.disabled = false;
+    if (submit) submit.disabled = false;
+  }
 }
 
 /* ---------- validation ---------- */
@@ -1122,6 +1138,7 @@ document.addEventListener('submit', async e => {
   }
 
   if (type === 'listing') {
+    if (photoUploadActive) return toast('Please wait for photo uploads to finish.');
     const id = form.dataset.id;
     const payload = {
       zone_id: Number(fd.get('zone_id')), campus: fd.get('campus') || 'MAIN',
