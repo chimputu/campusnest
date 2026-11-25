@@ -5,6 +5,7 @@ const env = require('../config/env');
 const { httpError } = require('../utils');
 
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
 function cloudinaryConfigured(config = env) {
   return Boolean(config.CLOUDINARY_CLOUD_NAME && config.CLOUDINARY_API_KEY && config.CLOUDINARY_API_SECRET);
@@ -31,7 +32,8 @@ function publicUrl(key, config = env) {
 
 // Cloudinary signs the upload parameters (not the file) with the API secret.
 // https://cloudinary.com/documentation/upload_images#generating_authentication_signatures
-function signCloudinaryUpload(userId, config = env) {
+function signCloudinaryUpload(userId, config = env, bytes) {
+  if (bytes !== undefined && bytes > MAX_UPLOAD_BYTES) throw httpError(413, 'payload_too_large');
   const folder = `campusnest/${userId}`;
   const timestamp = Math.floor(Date.now() / 1000);
   const toSign = `folder=${folder}&timestamp=${timestamp}`;
@@ -48,9 +50,10 @@ function signCloudinaryUpload(userId, config = env) {
   };
 }
 
-async function presignPut(userId, contentType, config = env) {
+async function presignPut(userId, contentType, bytes, config = env) {
+  if (bytes !== undefined && bytes > MAX_UPLOAD_BYTES) throw httpError(413, 'payload_too_large');
   if (!EXT[contentType]) throw httpError(400, 'validation_failed', { issues: [{ path: 'content_type', message: 'unsupported image type' }] });
-  if (cloudinaryConfigured(config)) return signCloudinaryUpload(userId, config);
+  if (cloudinaryConfigured(config)) return signCloudinaryUpload(userId, config, bytes);
 
   const ext = EXT[contentType];
   if (!s3Configured(config)) throw httpError(503, 'storage_unavailable');
@@ -62,4 +65,4 @@ async function presignPut(userId, contentType, config = env) {
   return { provider: 's3', key, url, public_url: publicUrl(key, config) };
 }
 
-module.exports = { configured, cloudinaryConfigured, s3Configured, presignPut, publicUrl, signCloudinaryUpload };
+module.exports = { MAX_UPLOAD_BYTES, configured, cloudinaryConfigured, s3Configured, presignPut, publicUrl, signCloudinaryUpload };

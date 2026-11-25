@@ -8,6 +8,9 @@ const { notify, displayName } = require('../lib/helpers');
 
 const router = express.Router();
 
+const USER_COLS = `id, full_name, email, phone, role, account_status, student_id,
+                   registration_number, landlord_verified, suspended_reason, created_at, updated_at`;
+
 router.use(requireRole('ADMIN'));
 
 const landlordQuerySchema = z.object({
@@ -60,7 +63,7 @@ router.get('/landlords', validateQuery(landlordQuerySchema), asyncHandler(async 
 router.post('/landlords/:id/verify', asyncHandler(async (req, res) => {
   const id = idParam(req.params.id);
   const { rows } = await pool.query(
-    "UPDATE users SET landlord_verified = TRUE WHERE id = $1 AND role = 'LANDLORD' RETURNING *",
+    `UPDATE users SET landlord_verified = TRUE WHERE id = $1 AND role = 'LANDLORD' RETURNING ${USER_COLS}`,
     [id]
   );
   if (!rows.length) throw httpError(404, 'not_found');
@@ -71,7 +74,7 @@ router.post('/landlords/:id/verify', asyncHandler(async (req, res) => {
 router.post('/landlords/:id/unverify', asyncHandler(async (req, res) => {
   const id = idParam(req.params.id);
   const { rows } = await pool.query(
-    "UPDATE users SET landlord_verified = FALSE WHERE id = $1 AND role = 'LANDLORD' RETURNING *",
+    `UPDATE users SET landlord_verified = FALSE WHERE id = $1 AND role = 'LANDLORD' RETURNING ${USER_COLS}`,
     [id]
   );
   if (!rows.length) throw httpError(404, 'not_found');
@@ -82,7 +85,7 @@ router.post('/users/:id/suspend', validateBody(suspendSchema), asyncHandler(asyn
   const id = idParam(req.params.id);
   const { rows } = await pool.query(
     `UPDATE users SET account_status = 'SUSPENDED', suspended_reason = $2
-      WHERE id = $1 AND role <> 'ADMIN' RETURNING *`,
+      WHERE id = $1 AND role <> 'ADMIN' RETURNING ${USER_COLS}`,
     [id, req.valid.body.reason]
   );
   if (!rows.length) throw httpError(404, 'not_found');
@@ -94,7 +97,7 @@ router.post('/users/:id/reactivate', asyncHandler(async (req, res) => {
   const id = idParam(req.params.id);
   const { rows } = await pool.query(
     `UPDATE users SET account_status = 'ACTIVE', suspended_reason = NULL
-      WHERE id = $1 AND role <> 'ADMIN' RETURNING *`,
+      WHERE id = $1 AND role <> 'ADMIN' RETURNING ${USER_COLS}`,
     [id]
   );
   if (!rows.length) throw httpError(404, 'not_found');

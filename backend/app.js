@@ -34,7 +34,7 @@ app.use(cookieParser());
 app.use(cors({ origin: env.CLIENT_ORIGIN, credentials: true }));
 app.use(checkOrigin);
 
-const bigJson = express.json({ limit: '6mb' });
+const bigJson = express.json({ limit: '36mb' });
 app.post('/api/listings', bigJson);
 app.patch('/api/listings/:id', bigJson);
 app.use(express.json({ limit: '1mb' }));

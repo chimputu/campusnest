@@ -119,9 +119,10 @@
 
     let signature = null;
     try {
-      signature = await request('POST', '/api/uploads/presign', { content_type: file.type });
+      signature = await request('POST', '/api/uploads/presign', { content_type: file.type, bytes: file.size });
     } catch (err) {
       if (err.error !== 'storage_unavailable') throw err;
+      return fileToDataUrl(file);
     }
 
     if (signature && signature.provider === 'cloudinary' && signature.upload_url) {

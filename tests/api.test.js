@@ -87,9 +87,95 @@ test('public config contains no storage credentials and is briefly cacheable', a
 
 test('storage presigning returns 503 when no provider is configured', async () => {
   const { presignPut } = require('../backend/lib/storage');
-  await assert.rejects(presignPut(1, 'image/jpeg', {}), (err) =>
+  await assert.rejects(presignPut(1, 'image/jpeg', 1024, {}), (err) =>
     err.status === 503 && err.code === 'storage_unavailable'
   );
+});
+
+test('storage refuses oversized uploads before signing credentials', async () => {
+  const { presignPut } = require('../backend/lib/storage');
+  await assert.rejects(presignPut(1, 'image/jpeg', 5 * 1024 * 1024 + 1, {}), (err) =>
+    err.status === 413 && err.code === 'payload_too_large'
+  );
+});
+
+test('Cloudinary signatures refuse oversized uploads', () => {
+  const { signCloudinaryUpload } = require('../backend/lib/storage');
+  const config = {
+    CLOUDINARY_CLOUD_NAME: 'campusnest-test',
+    CLOUDINARY_API_KEY: 'public-test-key',
+    CLOUDINARY_API_SECRET: 'test-secret'
+  };
+  assert.throws(() => signCloudinaryUpload(42, config, 5 * 1024 * 1024 + 1), (err) =>
+    err.status === 413 && err.code === 'payload_too_large'
+  );
+});
+
+test('browser upload sends file size and uses the local data URL fallback', async () => {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  let presignBody;
+  const context = {
+    window: {},
+    queueMicrotask,
+    fetch: async (_path, options) => {
+      presignBody = JSON.parse(options.body);
+      return { status: 503, ok: false, json: async () => ({ error: 'storage_unavailable' }) };
+    },
+    FileReader: class {
+      readAsDataURL() { this.result = 'data:image/png;base64,INPUT'; queueMicrotask(() => this.onload()); }
+    },
+    Image: class {
+      width = 20;
+      height = 20;
+      set src(_value) { queueMicrotask(() => this.onload()); }
+    },
+    document: {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ drawImage() {} }),
+        toDataURL: () => 'data:image/jpeg;base64,LOCAL'
+      })
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../frontend/js/api.js'), 'utf8'), context);
+  const file = { type: 'image/png', size: 1024 };
+  const result = await context.window.api.uploadListingPhoto(file);
+  assert.equal(JSON.stringify(presignBody), JSON.stringify({ content_type: 'image/png', bytes: 1024 }));
+  assert.equal(result, 'data:image/jpeg;base64,LOCAL');
+});
+
+test('browser upload uses a signed Cloudinary response when storage is configured', async () => {
+  const fs = require('node:fs');
+  const vm = require('node:vm');
+  const requests = [];
+  const context = {
+    window: {},
+    FormData: class { append() {} },
+    fetch: async (path, options) => {
+      requests.push({ path, options });
+      if (path === '/api/uploads/presign') {
+        return {
+          status: 200,
+          ok: true,
+          json: async () => ({
+            provider: 'cloudinary',
+            upload_url: 'https://api.cloudinary.com/v1_1/campusnest-test/image/upload',
+            params: { api_key: 'test-key', timestamp: 123, signature: 'test-signature', folder: 'campusnest/42' }
+          })
+        };
+      }
+      return { status: 200, ok: true, json: async () => ({ secure_url: 'https://res.cloudinary.com/campusnest-test/image/upload/photo.jpg' }) };
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../frontend/js/api.js'), 'utf8'), context);
+  const result = await context.window.api.uploadListingPhoto({ type: 'image/jpeg', size: 2048 });
+  assert.equal(result, 'https://res.cloudinary.com/campusnest-test/image/upload/photo.jpg');
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].path, '/api/uploads/presign');
+  assert.equal(JSON.stringify(JSON.parse(requests[0].options.body)), JSON.stringify({ content_type: 'image/jpeg', bytes: 2048 }));
+  assert.equal(requests[1].path, 'https://api.cloudinary.com/v1_1/campusnest-test/image/upload');
 });
 
 test('Cloudinary upload signature covers the signed folder and timestamp', () => {
@@ -100,7 +186,7 @@ test('Cloudinary upload signature covers the signed folder and timestamp', () =>
     CLOUDINARY_API_KEY: 'public-test-key',
     CLOUDINARY_API_SECRET: 'test-secret'
   };
-  const signed = signCloudinaryUpload(42, config);
+  const signed = signCloudinaryUpload(42, config, 1024);
   const { timestamp, folder, signature, api_key } = signed.params;
   const expected = crypto.createHash('sha1')
     .update(`folder=${folder}&timestamp=${timestamp}${config.CLOUDINARY_API_SECRET}`)
@@ -183,12 +269,23 @@ test('listing create, browse, detail and soft delete', async () => {
     zone_id: zoneId, campus: 'MAIN', title: 'Integration Test House', street_landmark: 'Main Gate',
     occupancy: 'SHARING', gender_policy: 'MIXED_SEPARATE_BLOCKS', electricity: 'INCLUDED_IN_RENT',
     room_type: 'SHARED_ABLUTION', kitchen: 'SHARED_KITCHEN', security_level: 'FENCE_ONLY',
-    total_beds: 1, rent_per_month_zmw: 700, photos: []
+    total_beds: 1, rent_per_month_zmw: 700,
+    has_parking: true, water_included: true,
+    photos: [{ url: 'data:image/jpeg;base64,' + 'A'.repeat(650000) }]
   };
   const { configured } = require('../backend/lib/storage');
+  const missingBytes = await call('POST', '/api/uploads/presign', {
+    cookie: login.cookie, body: { content_type: 'image/jpeg' }
+  });
+  assert.equal(missingBytes.status, 400);
+  const oversizedUpload = await call('POST', '/api/uploads/presign', {
+    cookie: login.cookie, body: { content_type: 'image/jpeg', bytes: 5 * 1024 * 1024 + 1 }
+  });
+  assert.equal(oversizedUpload.status, 413);
+  assert.equal(oversizedUpload.json.error, 'payload_too_large');
   if (!configured()) {
     const unconfiguredUpload = await call('POST', '/api/uploads/presign', {
-      cookie: login.cookie, body: { content_type: 'image/jpeg' }
+      cookie: login.cookie, body: { content_type: 'image/jpeg', bytes: 1024 }
     });
     assert.equal(unconfiguredUpload.status, 503);
     assert.equal(unconfiguredUpload.json.error, 'storage_unavailable');
@@ -204,12 +301,43 @@ test('listing create, browse, detail and soft delete', async () => {
   const detail = await call('GET', `/api/listings/${created.listingId}`);
   assert.equal(detail.status, 200);
   assert.ok('occupied_beds' in detail.json.listing);
+  assert.equal(detail.json.listing.has_parking, true);
+  assert.equal(detail.json.listing.water_included, true);
+  assert.ok(detail.json.listing.photos[0].url.length > 600000);
   const landlordProfile = detail.json.listing.landlord;
   assert.ok(!('phone' in landlordProfile) && !('email' in landlordProfile), 'public detail must not leak contact data');
   const browse = await call('GET', '/api/listings');
   assert.ok(browse.json.listings.some(l => l.id === created.listingId));
+  const filtered = await call('GET', '/api/listings?has_parking=1&water_included=true');
+  assert.ok(filtered.json.listings.some(l => l.id === created.listingId));
+  const updated = await call('PATCH', `/api/listings/${created.listingId}`, {
+    cookie: login.cookie, body: { has_parking: false, water_included: false }
+  });
+  assert.equal(updated.status, 200, JSON.stringify(updated.json));
+  assert.equal(updated.json.listing.has_parking, false);
+  assert.equal(updated.json.listing.water_included, false);
   assert.equal((await call('DELETE', `/api/listings/${created.listingId}`, { cookie: login.cookie })).status, 204);
   assert.equal((await call('PATCH', `/api/listings/${created.listingId}`, { cookie: login.cookie, body: { title: 'changed' } })).json.error, 'listing_removed');
+});
+
+test('admin user mutations never return password hashes', async () => {
+  const env = require('../backend/config/env');
+  const adminLogin = await call('POST', '/api/auth/login', {
+    body: { email: env.ADMIN_EMAIL, password: env.ADMIN_PASSWORD }
+  });
+  assert.equal(adminLogin.status, 200, JSON.stringify(adminLogin.json));
+  const actions = [
+    ['POST', `/api/admin/landlords/${created.landlordId}/verify`],
+    ['POST', `/api/admin/landlords/${created.landlordId}/unverify`],
+    ['POST', `/api/admin/users/${created.tenantId}/suspend`, { reason: 'integration test' }],
+    ['POST', `/api/admin/users/${created.tenantId}/reactivate`]
+  ];
+  for (const [method, path, body] of actions) {
+    const response = await call(method, path, { cookie: adminLogin.cookie, body });
+    assert.equal(response.status, 200, JSON.stringify(response.json));
+    assert.ok(response.json.user);
+    assert.ok(!('password_hash' in response.json.user), path);
+  }
 });
 
 test('request lifecycle and redacted receipt', async () => {

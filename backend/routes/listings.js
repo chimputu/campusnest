@@ -30,8 +30,8 @@ function isAllowedPhotoUrl(value) {
   return Boolean(s3Host && url.hostname === s3Host && url.pathname.startsWith('/listings/'));
 }
 
-const photoUrl = z.string().max(600000).refine((v) => {
-  if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) return v.length <= 600000;
+const photoUrl = z.string().max(7000000).refine((v) => {
+  if (/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(v)) return true;
   if (isAllowedPhotoUrl(v)) return true;
   return /^\/image\/[A-Za-z0-9._-]+$/.test(v);
 }, 'invalid photo url');
@@ -55,7 +55,9 @@ const listingBase = z.object({
   has_solar_backup: z.boolean().optional().default(false),
   has_borehole: z.boolean().optional().default(false),
   has_overhead_tank: z.boolean().optional().default(false),
+  has_parking: z.boolean().optional().default(false),
   free_wifi: z.boolean().optional().default(false),
+  water_included: z.boolean().optional().default(false),
   furnished: z.boolean().optional().default(false),
   furnishings_note: z.string().trim().max(500).optional(),
   has_curfew: z.boolean().optional().default(false),
@@ -95,7 +97,9 @@ const querySchema = z.object({
   has_solar_backup: z.enum(['0', '1', 'false', 'true']).optional(),
   has_borehole: z.enum(['0', '1', 'false', 'true']).optional(),
   has_overhead_tank: z.enum(['0', '1', 'false', 'true']).optional(),
+  has_parking: z.enum(['0', '1', 'false', 'true']).optional(),
   free_wifi: z.enum(['0', '1', 'false', 'true']).optional(),
+  water_included: z.enum(['0', '1', 'false', 'true']).optional(),
   furnished: z.enum(['0', '1', 'false', 'true']).optional(),
   sort: z.enum(['distance', 'price', 'newest']).optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(100),
@@ -155,7 +159,7 @@ router.get('/', optionalAuth, validateQuery(querySchema), asyncHandler(async (re
   if (q.room_type) add('l.room_type = $N', q.room_type);
   if (q.kitchen) add('l.kitchen = $N', q.kitchen);
   if (q.security_level) add('l.security_level = $N', q.security_level);
-  for (const flag of ['has_solar_backup', 'has_borehole', 'has_overhead_tank', 'free_wifi', 'furnished']) {
+  for (const flag of ['has_solar_backup', 'has_borehole', 'has_overhead_tank', 'has_parking', 'free_wifi', 'water_included', 'furnished']) {
     if (q[flag] && ['1', 'true'].includes(q[flag])) where.push(`l.${flag} = TRUE`);
   }
 
@@ -225,18 +229,18 @@ router.post('/', requireRole('LANDLORD'), validateBody(createListingSchema), asy
          landlord_id, zone_id, campus, title, description, street_landmark,
          distance_to_campus_km, walk_time_minutes, latitude, longitude,
          occupancy, gender_policy, electricity, room_type, kitchen, security_level,
-         has_solar_backup, has_borehole, has_overhead_tank, free_wifi, furnished,
+         has_solar_backup, has_borehole, has_overhead_tank, has_parking, free_wifi, water_included, furnished,
          furnishings_note, has_curfew, curfew_time, total_beds, rent_per_month_zmw,
          deposit_zmw, status, created_at, updated_at
        ) VALUES (
          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-         $21,$22,$23,$24,$25,$26,$27,$28,NOW(),NOW()
+         $21,$22,$23,$24,$25,$26,$27,$28,$29,$30,NOW(),NOW()
        ) RETURNING *`,
       [
         req.user.id, b.zone_id, b.campus, b.title, b.description || null, b.street_landmark,
         b.distance_to_campus_km ?? null, b.walk_time_minutes ?? null, b.latitude ?? null, b.longitude ?? null,
         b.occupancy, b.gender_policy, b.electricity, b.room_type, b.kitchen, b.security_level,
-        b.has_solar_backup, b.has_borehole, b.has_overhead_tank, b.free_wifi, b.furnished,
+        b.has_solar_backup, b.has_borehole, b.has_overhead_tank, b.has_parking, b.free_wifi, b.water_included, b.furnished,
         b.furnishings_note || null, b.has_curfew, b.curfew_time || null, b.total_beds, b.rent_per_month_zmw,
         b.deposit_zmw, b.status
       ]
@@ -279,7 +283,7 @@ router.patch('/:id', requireRole('LANDLORD'), validateBody(patchListingSchema), 
       'campus', 'title', 'description', 'street_landmark', 'distance_to_campus_km',
       'walk_time_minutes', 'latitude', 'longitude', 'occupancy', 'gender_policy',
       'electricity', 'room_type', 'kitchen', 'security_level', 'has_solar_backup',
-      'has_borehole', 'has_overhead_tank', 'free_wifi', 'furnished', 'furnishings_note',
+      'has_borehole', 'has_overhead_tank', 'has_parking', 'free_wifi', 'water_included', 'furnished', 'furnishings_note',
       'has_curfew', 'curfew_time', 'total_beds', 'rent_per_month_zmw', 'deposit_zmw',
       'status', 'zone_id'
     ];

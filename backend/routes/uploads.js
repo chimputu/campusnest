@@ -5,7 +5,7 @@ const env = require('../config/env');
 const { requireAuth } = require('../middleware/auth');
 const { validateBody } = require('../middleware/validate');
 const { asyncHandler } = require('../utils');
-const { presignPut } = require('../lib/storage');
+const { MAX_UPLOAD_BYTES, presignPut } = require('../lib/storage');
 
 const router = express.Router();
 
@@ -19,11 +19,14 @@ const uploadLimiter = rateLimit({
 });
 
 const schema = z.object({
-  content_type: z.enum(['image/jpeg', 'image/png', 'image/webp'])
+  content_type: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  bytes: z.number().int().positive()
 });
 
 router.post('/presign', uploadLimiter, requireAuth, validateBody(schema), asyncHandler(async (req, res) => {
-  const result = await presignPut(req.user.id, req.valid.body.content_type);
+  const { bytes, content_type: contentType } = req.valid.body;
+  if (bytes > MAX_UPLOAD_BYTES) return res.status(413).json({ error: 'payload_too_large' });
+  const result = await presignPut(req.user.id, contentType, bytes);
   return res.status(200).json(result);
 }));
 

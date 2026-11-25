@@ -343,3 +343,38 @@ input[type=checkbox],input[type=radio]{width:1.25rem;height:1.25rem;accent-color
 .leaflet-map{height:420px;width:100%;border-radius:12px;overflow:hidden;background:#e6eddc}
 .map-box{position:relative}
 .map-box .search-area{position:absolute;right:.75rem;bottom:.75rem;z-index:500}
+
+/* ---------- CampusNest role selection refresh ---------- */
+.auth2-role .auth2-top{padding:1.25rem clamp(1rem,4vw,3rem)}
+.auth2-role .auth2-body{max-width:1280px;grid-template-columns:minmax(0,1.1fr) minmax(360px,460px);gap:clamp(2rem,7vw,7rem);padding:2rem 2rem 4rem}
+.auth2-role .auth2-hero{max-width:650px}
+.auth2-role .auth2-hero h1{max-width:11ch;font-size:clamp(3rem,6vw,5.1rem);letter-spacing:-.045em;line-height:1.02}
+.auth2-role .auth2-hero p{max-width:34rem;font-size:1.15rem;line-height:1.7}
+.auth2-role .auth2-points{gap:.85rem;margin-top:1.7rem}
+.auth2-role .auth-box{border:1px solid rgba(255,255,255,.72);border-radius:24px;padding:clamp(1.5rem,3vw,2.4rem);box-shadow:0 28px 75px rgba(4,27,34,.34)}
+.role-eyebrow{color:var(--teal);font-size:.75rem;font-weight:800;letter-spacing:.13em;margin-bottom:.6rem}
+.role-intro{color:var(--muted);margin-bottom:1.1rem}
+.auth2-role .auth-box h2{font-size:clamp(1.55rem,3vw,1.9rem);letter-spacing:-.025em}
+.auth2-role .role-grid{gap:.75rem;margin:1.25rem 0 1.1rem}
+.auth2-role .role-card{position:relative;align-items:center;min-height:96px;padding:1rem 3rem 1rem 1rem;border:1.5px solid #d4dfdf;border-radius:16px;background:#fff;box-shadow:0 3px 12px rgba(20,54,60,.04)}
+.auth2-role .role-card .ico{width:50px;height:50px;border-radius:15px;background:#e6f0f1;color:var(--teal)}
+.auth2-role .role-card .ico svg{width:25px;height:25px}
+.auth2-role .role-card .role-copy{display:grid;gap:.22rem}
+.auth2-role .role-card strong{font-size:1.08rem}
+.auth2-role .role-card span.sub{line-height:1.45}
+.auth2-role .role-card[aria-pressed="true"]{border-color:var(--teal);background:#eff7f6;box-shadow:inset 0 0 0 1px var(--teal),0 6px 16px rgba(15,76,92,.08)}
+.auth2-role .role-card[aria-pressed="true"]::after{content:"✓";position:absolute;right:1rem;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:25px;height:25px;border-radius:50%;background:var(--teal);color:white;font-weight:800}
+.auth2-role .role-card:hover{border-color:var(--teal);transform:translateY(-2px);box-shadow:0 8px 20px rgba(15,76,92,.12)}
+.auth2-role .role-continue{min-height:52px;border-radius:12px;font-weight:700}
+.auth2-role .auth-switch{font-size:.92rem}
+@media (max-width:900px){
+  .auth2-role .auth2-body{max-width:640px;grid-template-columns:1fr;gap:1.25rem;padding:0 1.5rem 2rem}
+  .auth2-role .auth2-hero h1{max-width:14ch;font-size:clamp(2rem,6vw,2.8rem);line-height:1.08}
+}
+@media (max-width:520px){
+  .auth2-role .auth2-top{padding:.8rem 1rem}
+  .auth2-role .auth2-body{padding:0 1rem 1.5rem}
+  .auth2-role .auth-box{padding:1.3rem;border-radius:20px}
+  .auth2-role .role-card{min-height:88px;padding:.85rem 2.8rem .85rem .85rem}
+  .auth2-role .role-card .ico{width:44px;height:44px}
+}

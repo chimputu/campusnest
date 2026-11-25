@@ -19,7 +19,7 @@ const IMAGES = {
   ]
 };
 
-const APP_NAME = 'Off Campus Accommodation';
+const APP_NAME = 'CampusNest';
 const MAX_PHOTOS = 5;
 const OVERLAY = 0.75;
 
@@ -95,6 +95,7 @@ function mapListing(l) {
     deposit: Number(l.deposit_zmw || l.deposit) || 0,
     bedrooms: Number(l.total_beds || l.bedrooms) || 1, bathrooms: 1, perRoom: 1,
     selfContained: l.room_type === 'SELF_CONTAINED',
+    hasParking: Boolean(l.has_parking), waterIncluded: Boolean(l.water_included),
     available: l.status === 'ACTIVE', status: l.status || 'ACTIVE',
     availableFrom: l.created_at ? String(l.created_at).slice(0, 10) : '',
     utilities, amenities, description: l.description || '',
@@ -159,7 +160,7 @@ function ratingOf(o) {
 
 /* ---------- UI state ---------- */
 let pendingRole = null;
-let filters = { q: '', maxPrice: '', perRoom: '', selfContained: false, availableOnly: false, wifi: false, sort: 'near', open: false };
+let filters = { q: '', maxPrice: '', perRoom: '', selfContained: false, availableOnly: false, wifi: false, parking: false, water: false, sort: 'near', open: false };
 let formImgs = [];
 let photoUploadActive = false;
 let contactCache = {};
@@ -198,6 +199,8 @@ function queryFromFilters() {
   if (filters.selfContained) p.set('room_type', 'SELF_CONTAINED');
   if (filters.availableOnly) p.set('status_available', '1');
   if (filters.wifi) p.set('free_wifi', 'true');
+  if (filters.parking) p.set('has_parking', 'true');
+  if (filters.water) p.set('water_included', 'true');
   if (filters.sort === 'near') p.set('sort', 'distance');
   else if (filters.sort === 'low') p.set('sort', 'price');
   else if (filters.sort === 'high') p.set('sort', 'price');
@@ -293,8 +296,8 @@ async function refreshMe(silent) {
 }
 
 /* ---------- layout pieces ---------- */
-function authLayout(title, sub, inner, bgUrl) {
-  return `<div class="auth2" style="${bg(bgUrl, ' fixed')}">
+function authLayout(title, sub, inner, bgUrl, variant = '') {
+  return `<div class="auth2 ${variant}" style="${bg(bgUrl, ' fixed')}">
     <header class="auth2-top">
       <a class="logo logo-pill" href="#/role">${ICON.logo}${APP_NAME}</a>
       <nav aria-label="Account"><a class="btn btn-ghost-w btn-sm" href="#/login">Log in</a><a class="btn btn-accent btn-sm" href="#/role">Sign up</a></nav>
@@ -362,14 +365,14 @@ function cardHtml(l, withSave) {
 
 /* ---------- auth screens ---------- */
 function viewRole() {
-  $app.innerHTML = authLayout('Find a room that\'s close to class.', APP_NAME + ' connects off-campus students with landlords who have boarding houses nearby.', `
-    <h2>Join as a…</h2><p style="color:var(--muted)">Choose how you will use the app.</p>
+  $app.innerHTML = authLayout('Your next place is closer than you think.', 'CampusNest helps Mulungushi University students find a comfortable place to call home near campus.', `
+    <p class="role-eyebrow">WELCOME TO CAMPUSNEST</p><h2>How will you use CampusNest?</h2><p class="role-intro">Choose the option that best describes you.</p>
     <div class="role-grid">
-      <button class="role-card" data-act="pick-role" data-role="tenant" aria-pressed="${pendingRole === 'tenant'}"><span class="ico">${ICON.tenant}</span><span><strong>Tenant</strong><span class="sub">I am looking for a place to rent near campus.</span></span></button>
-      <button class="role-card" data-act="pick-role" data-role="landlord" aria-pressed="${pendingRole === 'landlord'}"><span class="ico">${ICON.landlord}</span><span><strong>Landlord</strong><span class="sub">I want to list my property for students to find.</span></span></button>
+      <button class="role-card" data-act="pick-role" data-role="tenant" aria-pressed="${pendingRole === 'tenant'}"><span class="ico">${ICON.tenant}</span><span class="role-copy"><strong>I'm a student</strong><span class="sub">Explore rooms and boarding houses close to campus.</span></span></button>
+      <button class="role-card" data-act="pick-role" data-role="landlord" aria-pressed="${pendingRole === 'landlord'}"><span class="ico">${ICON.landlord}</span><span class="role-copy"><strong>I'm a landlord</strong><span class="sub">List your property and connect with students.</span></span></button>
     </div>
-    <button class="btn btn-primary btn-block" id="role-continue" data-act="role-continue" ${pendingRole ? '' : 'disabled'}>Continue</button>
-    <p class="auth-switch">Already have an account? <a href="#/login">Log in</a></p>`, IMAGES.roleBackground);
+    <button class="btn btn-primary btn-block role-continue" id="role-continue" data-act="role-continue" ${pendingRole ? '' : 'disabled'}>Continue</button>
+    <p class="auth-switch">Already have an account? <a href="#/login">Log in</a></p>`, IMAGES.roleBackground, 'auth2-role');
 }
 
 function viewRegister() {
@@ -419,6 +422,9 @@ function filtered() {
     if (q && !((l.title + ' ' + l.location).toLowerCase().includes(q))) return false;
     if (filters.maxPrice && l.price > Number(filters.maxPrice)) return false;
     if (filters.availableOnly && !l.available) return false;
+    if (filters.wifi && !l.utilities.includes('WiFi')) return false;
+    if (filters.parking && !l.hasParking) return false;
+    if (filters.water && !l.waterIncluded) return false;
     return true;
   }).sort((a, b) => filters.sort === 'low' ? a.price - b.price : filters.sort === 'high' ? b.price - a.price : a.distance - b.distance);
 }
@@ -444,6 +450,8 @@ async function viewHome() {
         <label class="chk" for="f-self"><input id="f-self" type="checkbox" data-filter="selfContained" ${filters.selfContained ? 'checked' : ''}> Self-contained only</label>
         <label class="chk" for="f-avail"><input id="f-avail" type="checkbox" data-filter="availableOnly" ${filters.availableOnly ? 'checked' : ''}> Available only</label>
         <label class="chk" for="f-wifi"><input id="f-wifi" type="checkbox" data-filter="wifi" ${filters.wifi ? 'checked' : ''}> WiFi included</label>
+        <label class="chk" for="f-parking"><input id="f-parking" type="checkbox" data-filter="parking" ${filters.parking ? 'checked' : ''}> Parking available</label>
+        <label class="chk" for="f-water"><input id="f-water" type="checkbox" data-filter="water" ${filters.water ? 'checked' : ''}> Water included</label>
       </div></section>
     <div class="section-head"><h2>Available near campus <small id="count" style="font-size:.9rem;color:var(--muted);font-family:var(--font-body);font-weight:400"></small></h2><a href="#/map" class="btn btn-ghost btn-sm">Map view</a></div>
     <div class="grid" id="cards"></div>`, 'home');
@@ -687,6 +695,8 @@ async function viewListingForm(id) {
         <label for="f-bore"><input id="f-bore" type="checkbox" name="has_borehole"> Borehole</label>
         <label for="f-tank"><input id="f-tank" type="checkbox" name="has_overhead_tank"> Overhead tank</label>
         <label for="f-solar"><input id="f-solar" type="checkbox" name="has_solar_backup"> Solar backup</label>
+        <label for="f-parking"><input id="f-parking" type="checkbox" name="has_parking" ${v.hasParking ? 'checked' : ''}> Parking</label>
+        <label for="f-water"><input id="f-water" type="checkbox" name="water_included" ${v.waterIncluded ? 'checked' : ''}> Water included</label>
       </div></fieldset>
       <div class="field"><label for="f-desc">Description</label><textarea id="f-desc" name="description" placeholder="Tell students what makes this place a good fit."></textarea></div>
       <div class="field"><label for="f-img">Photos (up to ${MAX_PHOTOS})</label><input id="f-img" type="file" accept="image/jpeg,image/png,image/webp" multiple data-upload="1"><p id="photo-upload-status" class="hint photo-upload-status" role="status" aria-live="polite">JPEG, PNG or WebP; up to 5 MB each.</p><div id="photo-grid" class="photo-grid">${photoGridHtml()}</div></div>
@@ -800,7 +810,7 @@ const actions = {
   'open-listing'(el) { go('#/listing/' + el.dataset.id); },
   'open-owner'(el) { go('#/owner/' + el.dataset.id + '/' + (el.dataset.l || '')); },
   'toggle-filters'(el) { filters.open = !filters.open; document.getElementById('filters').hidden = !filters.open; el.setAttribute('aria-expanded', filters.open); },
-  'clear-filters'() { filters = { q: '', maxPrice: '', perRoom: '', selfContained: false, availableOnly: false, wifi: false, sort: 'near', open: true }; viewHome(); },
+  'clear-filters'() { filters = { q: '', maxPrice: '', perRoom: '', selfContained: false, availableOnly: false, wifi: false, parking: false, water: false, sort: 'near', open: true }; viewHome(); },
   async 'toggle-save'(el) {
     if (!me()) return go('#/login');
     const id = Number(el.dataset.id);
@@ -1149,7 +1159,8 @@ document.addEventListener('submit', async e => {
       room_type: fd.get('room_type'), kitchen: fd.get('kitchen'), security_level: fd.get('security_level'),
       free_wifi: Boolean(fd.get('free_wifi')), furnished: Boolean(fd.get('furnished')),
       has_borehole: Boolean(fd.get('has_borehole')), has_overhead_tank: Boolean(fd.get('has_overhead_tank')),
-      has_solar_backup: Boolean(fd.get('has_solar_backup')),
+      has_solar_backup: Boolean(fd.get('has_solar_backup')), has_parking: Boolean(fd.get('has_parking')),
+      water_included: Boolean(fd.get('water_included')),
       description: fd.get('description').trim(),
       photos: formImgs.map(url => ({ url }))
     };
